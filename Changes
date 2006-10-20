@@ -1,6 +1,9 @@
 Revision history for Perl extension Data::Paginate.
 
-0.01  Wed Jan 26 15:56:01 2005
+0.0.2 Sat Oct 21 15:34:56 2006
+	- misc additions, 0.0.3 will have updated POD and more detailed changelog
+	
+0.0.1  Wed Jan 26 15:56:01 2005
 	- original version; created by h2xs 1.22 with options
 		-AXc -n Data::Paginate
 

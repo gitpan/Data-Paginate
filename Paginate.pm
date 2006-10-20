@@ -2,15 +2,25 @@ package Data::Paginate;
 
 use strict;
 use warnings;
-use version;our $VERSION = qv('0.0.1');
+use version;our $VERSION = qv('0.0.2');
 
-use Carp qw(croak);
+use Carp ();
 use POSIX ();
 use Class::Std;
 use Class::Std::Utils;
 
-{ #### begin scoping "inside-out" class ##
+sub croak {
+    local $Carp::CarpLevel = 1;
+    Carp::croak(@_);
+}
 
+sub carp {
+    local $Carp::CarpLevel = 1;
+    Carp::carp(@_);
+}
+
+{ #### begin scoping "inside-out" class ##
+        
 #### manually set_ because they recalculate ##
 #### needs manually set in BUILD ##
 
@@ -18,6 +28,8 @@ use Class::Std::Utils;
     sub set_total_entries {
         my ($self, $digit, $checkonly) = @_;
         my $reftype        = ref $digit;
+
+        # local $Carp::CarpLevel = 1;
         croak 'Argument to set_total_entries() must be a digit or an array ref' if $digit !~ m/^\d+$/ && $reftype ne 'ARRAY';
         return 1 if $checkonly;
         $total_entries{ ident $self } = $reftype eq 'ARRAY' ? @{ $digit } 
@@ -44,6 +56,16 @@ use Class::Std::Utils;
         $pages_per_set{ ident $self } = $digit;     
         $self->_calculate();    
     }
+    
+    my %sets_per_set             :ATTR('get' => 'sets_per_set', 'default' => '10');
+    sub set_sets_per_set { 
+        my ($self, $digit, $checkonly) = @_; 
+        croak 'Argument to set_sets_per_set() must be a digit' 
+           if $digit !~ m/^\d+$/;      
+        return 1 if $checkonly;
+        $sets_per_set{ ident $self } = $digit;     
+        $self->_calculate();    
+    }
 
     my %current_page              :ATTR('get' => 'current_page', 'default' => '1');
     sub _set_current_page {     
@@ -67,13 +89,21 @@ use Class::Std::Utils;
                 if $hashref->{$_} !~ m/^\d+$/;
         }
         return 1 if $checkonly;
-        $variable_entries_per_page{ idetn $self } = $hashref;
+        $variable_entries_per_page{ ident $self } = $hashref;
         $self->_calculate();
     }
 
 #### manually set_ because they need input checked ##
 #### needs manually set in BUILD ##
 
+    my %ext_obj :ATTR('get' => 'ext_obj');
+    sub set_ext_obj {
+        my ($self, $obj) = @_;
+        croak 'Argument to set_ext_obj() must be an object' 
+            if !ref $obj;
+        $ext_obj{ ident $self } = $obj;
+    }
+    
     my %page_result_display_map :ATTR('get' => 'page_result_display_map', 'default' => {}); 
     sub set_page_result_display_map {
         my ($self, $hashref) = @_;
@@ -107,7 +137,7 @@ use Class::Std::Utils;
         $html_line_white_space{ ident $self } = $digit;
     }
 
-    my %param_handler           :ATTR('get' => 'param_handler', 'default' => sub {eval 'use CGI;';CGI::param(@_);});
+    my %param_handler           :ATTR('get' => 'param_handler', 'default' => undef);
     sub set_param_handler {
         my ($self, $coderef) = @_;
         croak 'Argument to set_param_handler() must be a code ref' 
@@ -140,7 +170,9 @@ use Class::Std::Utils;
     my %last_set             :ATTR('get' => 'last_set');        
     my %first_set            :ATTR('get' => 'first_set');   
     my %last_page_in_set     :ATTR('get' => 'last_page_in_set');  
-    my %first_page_in_set    :ATTR('get' => 'first_page_in_set');  
+    my %first_page_in_set    :ATTR('get' => 'first_page_in_set'); 
+    my %last_set_in_set     :ATTR('get' => 'last_set_in_set');  
+    my %first_set_in_set    :ATTR('get' => 'first_set_in_set'); 
     my %current_set          :ATTR('get' => 'current_set');      
 
 #### manually get_ only because they require handling ##
@@ -177,6 +209,13 @@ use Class::Std::Utils;
         my $hashref = eval $self->_DUMP(); 
         return $hashref->{ ref $self }; 
     }
+    
+    sub get_state_html {
+        my ($self) = @_;
+        require Data::Dumper::HTML;
+        return Data::Dumper::HTML::dumper_html( $self->get_state_hashref() ) if defined wantarray;
+        print Data::Dumper::HTML::dumper_html( $self->get_state_hashref() );
+    }
 
 #### get_ and set_ ##
 
@@ -187,6 +226,8 @@ use Class::Std::Utils;
     my %pre_current_set        :ATTR('get' => 'pre_current_set', 'set' => 'pre_current_set', 'init_arg' => 'pre_current_set');
 
     my %total_entries_param    :ATTR('get' => 'total_entries_param', 'set' => 'total_entries_param', 'default' => 'te', 'init_arg' => 'total_entries_param');
+    my %total_entries_verify_param_name  :ATTR('get' => 'total_entries_verify_param_name',  'set' => 'total_entries_verify_param_name',  'default' => 've', 'init_arg' => 'total_entries_param_verify_name');
+    my %total_entries_verify_param_value :ATTR('get' => 'total_entries_verify_param_value', 'set' => 'total_entries_verify_param_value', 'default' => '',   'init_arg' => 'total_entries_param_verify_value');
     my %set_param              :ATTR('get' => 'set_param', 'set' => 'set_param', 'default' => 'st', 'init_arg' => 'set_param');
     my %next_page_html         :ATTR('get' => 'next_page_html', 'set' => 'next_page_html', 'default' => 'Next Page &rarr;', 'init_arg' => 'next_page_html');
     my %page_param             :ATTR('get' => 'page_param', 'set' => 'page_param', 'default' => 'pg', 'init_arg' => 'page_param');
@@ -202,7 +243,7 @@ use Class::Std::Utils;
     my %no_prev_set_html       :ATTR('get' => 'no_prev_set_html', 'set' => 'no_prev_set_html', 'default' => '', 'init_arg' => 'no_prev_set_html');
     my %as_table               :ATTR('get' => 'as_table', 'set' => 'as_table', 'default' => '0', 'init_arg' => 'as_table');
     my %pst_not_current_page   :ATTR('get' => 'pst_not_current_page', 'set' => 'pst_not_current_page', 'default' => ']', 'init_arg' => 'pst_not_current_page');
-    my %style                  :ATTR('get' => 'style', 'set' => 'style', 'default' => '<style type="text/css"><!-- #page {text-align: center} #set {text-align: center} --></style>', 'init_arg' => 'style');
+    my %style                  :ATTR('get' => 'style', 'set' => 'style', 'init_arg' => 'style');
     my %no_prev_page_html      :ATTR('get' => 'no_prev_page_html', 'set' => 'no_prev_page_html', 'default' => '', 'init_arg' => 'no_prev_page_html');
     my %one_page_hide          :ATTR('get' => 'one_page_hide', 'set' => 'one_page_hide', 'default' => '0', 'init_arg' => 'one_page_hide');
     my %next_set_html          :ATTR('get' => 'next_set_html', 'set' => 'next_set_html', 'default' => 'Next Set &rarr;', 'init_arg' => 'next_set_html');
@@ -222,6 +263,9 @@ use Class::Std::Utils;
     my %of_page_html           :ATTR('get' => 'of_page_html',   'set' => 'of_page_html',   'default' => '',     'init_arg' => 'of_page_html');
     my %of_set_html            :ATTR('get' => 'of_set_html',    'set' => 'of_set_html',    'default' => '',     'init_arg' => 'of_set_html');
 
+    my %data_html_config       :ATTR('get' => 'data_html_config', 'init_arg' => 'data_html_config');
+    my %perpage_html_config    :ATTR('get' => 'perpage_html_config', 'init_arg' => 'perpage_html_config');
+    
     sub _calculate {
         my ($self) = @_;
         my $ident = ident $self;
@@ -260,11 +304,11 @@ use Class::Std::Utils;
 
         $first{$ident}                 = $last{$ident} - ($per_page - 1) if !$first{$ident};
         $previous_page{$ident}         = $current_page{$ident} - 1;
-        $next_page{$ident} = (($current_page{$ident} + 1) <= $last_page{$ident}) ? $current_page{$ident} + 1 : 0 ;
+        $next_page{$ident}             = (($current_page{$ident} + 1) <= $last_page{$ident}) ? $current_page{$ident} + 1 : 0 ;
         $entries_on_this_page{$ident}  = ($last{$ident} - $first{$ident}) + 1;
 
-        $of_page_string{$ident} = 'Page' unless defined $of_page_string{$ident}; # why do we need this hack, what make Class::Std miss it ??
-        $of_of_string{$ident}   = 'of' unless defined $of_of_string{$ident}; # why do we need this hack, what make Class::Std miss it ??
+        $of_page_string{$ident}        = 'Page' unless defined $of_page_string{$ident}; # why do we need this hack, what make Class::Std miss it ??
+        $of_of_string{$ident}          = 'of' unless defined $of_of_string{$ident}; # why do we need this hack, what make Class::Std miss it ??
         $of_page_html{$ident}          = "$of_page_string{$ident} $current_page{$ident} $of_of_string{$ident} $last_page{$ident}";
 
         if($pages_per_set{$ident} =~ m/^\d+$/ && $pages_per_set{$ident} > 0) {
@@ -276,6 +320,21 @@ use Class::Std::Utils;
             $last_page_in_set{$ident}  = ($first_page_in_set{$ident} + $pages_per_set{$ident}) - 1;
  
             $first_set{$ident}         = 1;
+                        
+            my $floor     = POSIX::floor($current_set{$ident}/$sets_per_set{$ident});
+            my $floor_cmp = $current_set{$ident}/$sets_per_set{$ident};
+            $first_set_in_set{$ident}  = ($floor * $sets_per_set{$ident}); 
+            if($floor == $floor_cmp && $first_set_in_set{$ident} > 1) {
+                $first_set_in_set{$ident} -= $sets_per_set{$ident};
+                $first_set_in_set{$ident} += 1 if $first_set_in_set{$ident} > 1;
+            }
+            else {
+                $first_set_in_set{$ident} += 1 if $first_set_in_set{$ident} > 1;
+            }
+            $last_set_in_set{$ident}   = ($first_set_in_set{$ident} + $sets_per_set{$ident});
+            $last_set_in_set{$ident}  -= 1 if $first_set_in_set{$ident} > 1;           
+            $last_set_in_set{$ident}   = $last_set{$ident} if $last_set_in_set{$ident} > $last_set{$ident};
+ 
             $previous_set{$ident}      = $current_set{$ident} - 1;
             $next_set{$ident}          = (($current_set{$ident} + 1) <= $last_set{$ident}) ? $current_set{$ident} + 1 : 0 ;
             $pages_in_set{$ident}      = $current_set{$ident} == $last_set{$ident} 
@@ -295,13 +354,22 @@ use Class::Std::Utils;
         $pre_current_set{ $ident }           = exists $arg_ref->{pre_current_set}  ? $arg_ref->{pre_current_set}  : q{&#187;};
         $pst_current_set{ $ident }           = exists $arg_ref->{pst_current_set}  ? $arg_ref->{pst_current_set}  : q{&#171;};
 
-        $result_display_map{ $ident }       = exists $arg_ref->{result_display_map}      ? exists $arg_ref->{result_display_map}      : {};  
-        $page_result_display_map{ $ident }  = exists $arg_ref->{page_result_display_map} ? exists $arg_ref->{page_result_display_map} : {};
-        $set_result_display_map{ $ident }   = exists $arg_ref->{set_result_display_map}  ? exists $arg_ref->{set_result_display_map}  : {};
-        $html_line_white_space{ $ident }    = exists $arg_ref->{html_line_white_space}   ? exists $arg_ref->{html_line_white_space}   : 0;
-        $param_handler{ $ident }            = exists $arg_ref->{param_handler}           
-            ? exists $arg_ref->{param_handler} : sub {eval 'use CGI;';CGI::param(@_);};
-        $sets_in_rows{ $ident }             = exists $arg_ref->{sets_in_rows}            ? exists $arg_ref->{sets_in_rows}            : 0;
+        $result_display_map{ $ident }        = exists $arg_ref->{result_display_map}      ? $arg_ref->{result_display_map}      : {};  
+        $page_result_display_map{ $ident }   = exists $arg_ref->{page_result_display_map} ? $arg_ref->{page_result_display_map} : {};
+        $set_result_display_map{ $ident }    = exists $arg_ref->{set_result_display_map}  ? $arg_ref->{set_result_display_map}  : {};
+
+        $html_line_white_space{ $ident }     = exists $arg_ref->{html_line_white_space}   ? $arg_ref->{html_line_white_space}   : 0;
+        $style{ $ident }                     = exists $arg_ref->{'style'} ? $arg_ref->{'style'} : $self->_default_style();
+
+        $ext_obj{ $ident }                   = exists $arg_ref->{'ext_obj'} && ref $arg_ref->{'ext_obj'} ? $arg_ref->{'ext_obj'} : undef;
+        if(!defined $ext_obj{ $ident }) {
+            require CGI;
+            $ext_obj{ $ident } = CGI->new();
+        }
+        
+        $param_handler{ $ident }             = exists $arg_ref->{param_handler}           
+            ? exists $arg_ref->{param_handler} : sub { $ext_obj{ $ident }->param(@_);};
+        $sets_in_rows{ $ident }              = exists $arg_ref->{sets_in_rows}            ? $arg_ref->{sets_in_rows}            : 0;
 
         #### $self->set_result_display_map( $result_display_map{ $ident } ); # this poofs the whole thing w/out error, why ?? ##
         $self->set_page_result_display_map( $page_result_display_map{ $ident } );
@@ -315,12 +383,15 @@ use Class::Std::Utils;
         $entries_per_page{ $ident }          = exists $arg_ref->{entries_per_page}          ? $arg_ref->{entries_per_page}          
                                                                                             : 10; # param 'pp' ???
         $pages_per_set{ $ident }             = exists $arg_ref->{pages_per_set}             ? $arg_ref->{pages_per_set} : 10;
-
+        $sets_per_set{ $ident }              = exists $arg_ref->{sets_per_set}              ? $arg_ref->{sets_per_set}  : $pages_per_set{ $ident };
+        
         $page_param{ $ident }                = exists $arg_ref->{page_param}                ? $arg_ref->{page_param}    : 'pg';
         $set_param{ $ident }                 = exists $arg_ref->{set_param}                 ? $arg_ref->{set_param}     : 'st';
-
+        $total_entries_verify_param_name{ $ident }  = exists $arg_ref->{total_entries_verify_param_name}  ? $arg_ref->{total_entries_verify_param_name}  : 've';
+        $total_entries_verify_param_value{ $ident } = exists $arg_ref->{total_entries_verify_param_value} ? $arg_ref->{total_entries_verify_param_value} : '';
+        
         $current_page{ $ident } = 1;
-        if($arg_ref->{current_page} !~ m/^\d+$/ 
+        if(!defined $arg_ref->{current_page} || $arg_ref->{current_page} !~ m/^\d+$/ 
            || $arg_ref->{current_page} < 1) {
             my $curpg = $param_handler{ $ident }->($page_param{ $ident });
             $current_page{ $ident } = $curpg if defined $curpg 
@@ -328,7 +399,7 @@ use Class::Std::Utils;
                                                 && $curpg > 0;
         } 
 
-        if($arg_ref->{current_set} !~ m/^\d+$/ 
+        if(!defined $arg_ref->{current_set} || $arg_ref->{current_set} !~ m/^\d+$/ 
            || $arg_ref->{current_set} < 1) {
             my $curst = $param_handler{ $ident }->($set_param{ $ident });
             $current_set{ $ident } = $curst if defined $curst
@@ -346,34 +417,156 @@ use Class::Std::Utils;
         $self->set_total_entries( $total_entries{ $ident }, 1 );
         $self->set_entries_per_page( $entries_per_page{ $ident }, 1 );
         $self->set_pages_per_set( $pages_per_set{ $ident }, 1 );
+        $self->set_sets_per_set( $sets_per_set{ $ident }, 1 );
         $self->_set_current_page( $current_page{ $ident }, 1 );
-        $self->set_variable_entries_per_page( $variable_entries_per_page{ $ident}, 1 );
+        $self->set_variable_entries_per_page( $variable_entries_per_page{ $ident }, 1 );
 
+        # set up defaults...
+        $data_html_config{ $ident } = {
+            'col_alt_ar'    => ['data_col'],
+            'row_alt_ar'    => [qw(data_light data_medium data_dark)],
+            'top'           => sub {
+                my ($self, $indent) = @_;
+                my $start = qq($indent<table class="data_table">\n);
+                return $start if !$data_html_config{ $ident }->{'inc_perpage'};
+                return qq($start$indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="2">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n);
+            },
+            'bot'           => sub {
+                my ($self, $indent) = @_;
+                my $start = qq($indent</table>\n); 
+                return $start if !$data_html_config{ $ident }->{'inc_perpage'};
+                return qq($indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="2">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n$start);
+            },
+            'header'        => sub {
+                my ($self, $indent) = @_;
+                return '' if $data_html_config{ ident $self }->{'stop_headers'};
+                return qq($indent$indent<tr class="data_header">\n$indent$indent$indent<td>Setup Mode: Header</td><td>'header' key needs set</td>\n$indent$indent</tr>\n);
+            },
+            'inc_perpage'   => 0,
+            'start_header'  => 1,
+            'items_per_row' => 1, 
+            'headers_every' => 10,
+            'stop_headers'  => 0,
+            'restart_row_alt_on_header' => 1,  
+            'start_array_index_at_zero' => 0,       
+            'idx_handler'   => sub {
+                my ($self, $indent, $array_idx, $col_alt) = @_;
+                # $array_idx = 'undef' if !defined $array_idx;
+                if(!defined $array_idx) {
+                    $data_html_config{ ident $self }->{'stop_headers'} = 1;
+                    return '';
+                }
+                return qq($indent$indent$indent<td class="$col_alt">Setup Mode: idx_handler array index: $array_idx</td><td class="$col_alt">'idx_handler' key needs set</td>\n);
+            },
+            'prerow'        => sub {
+                my ($self, $indent, $row_alt) = @_; 
+                return qq($indent$indent<tr class="$row_alt">\n);
+            },
+            'pstrow'        => sub {
+                my ($self, $indent, $row_alt) = @_;
+                return qq($indent$indent</tr>\n);
+            },
+            'no_results'    => 'Sorry, no entries were found.',
+        };
+
+        # ...change any that were passed
+        $self->set_data_html_config( $arg_ref->{'data_html_config'} ) 
+            if ref $arg_ref->{'data_html_config'} eq 'HASH';
+        
+        # ditto 
+        $perpage_html_config{ $ident } = {
+            'allowed'    => {},
+            'all_string' => 'All',
+            'pp_string'  => 'Per Page: ',
+            'pp_param'   => 'pp',
+        };
+
+        $self->set_perpage_html_config( $arg_ref->{'perpage_html_config'}, 1 ) 
+            if ref $arg_ref->{'perpage_html_config'} eq 'HASH';
+            
         $self->_calculate();
     }
 
+    sub set_perpage_html_config {
+        my($self, $hashref, $trustme_nocalc) = @_;
+        my $pp = '';
+    
+        for my $key (keys %{ $perpage_html_config{ ident $self } }) {
+            next if !exists $hashref->{$key};
+            if(ref $perpage_html_config{ ident $self }->{$key} && ref $perpage_html_config{ ident $self }->{$key} ne ref $hashref->{$key}) {
+                my $ref = ref $perpage_html_config{ ident $self }->{$key};
+                $ref = $ref eq 'ARRAY' ? "an $ref" : "a $ref";
+                carp "$key must be $ref reference";
+            }
+#            elsif( ( $key eq 'foo' || $key eq 'bar') && ($hashref->{$key} !~ m{^\d+$} || $hashref->{$key} <= 0) ) {
+#                carp "$key must be numeric and greater then zero";
+#            }
+            else {
+                $perpage_html_config{ ident $self }->{$key} = $hashref->{$key};
+            }
+        }
+        
+        if( keys %{ $perpage_html_config{ ident $self }->{'allowed'} }) {
+            my $test = $param_handler{ ident $self }->( $perpage_html_config{ ident $self }->{'pp_param'} );
+            $pp = $test || '';
+            $pp = '' if !$pp || !exists $perpage_html_config{ ident $self }->{'allowed'}{$test};
+            if(exists $perpage_html_config{ ident $self }->{'allowed'}{'0'} && $pp eq '0') {
+                $pp = $total_entries{ ident $self };
+                $perpage_html_config{ ident $self }->{'is_all'} = 1
+            }
+            else {
+                $perpage_html_config{ ident $self }->{'is_all'} = 0;
+            }
+        }
+        
+        if($pp) {
+            if($trustme_nocalc) {
+                $entries_per_page{ ident $self } = $pp;
+            }
+            else {
+                $self->set_entries_per_page( $pp );
+            }
+        }
+        
+        return 1;
+    }
+    
+    sub set_data_html_config {
+        my($self, $hashref) = @_;
+
+        for my $key (keys %{ $data_html_config{ ident $self } }) {
+            next if !exists $hashref->{$key};
+            if(ref $data_html_config{ ident $self }->{$key} && ref $data_html_config{ ident $self }->{$key} ne ref $hashref->{$key}) {
+                my $ref = ref $data_html_config{ ident $self }->{$key};
+                $ref .= $ref eq 'ARRAY' ? "an $ref" : "a $ref";
+                carp "$key must be $ref reference";
+            }
+            elsif( ( $key eq 'items_per_row' || $key eq 'headers_every') && ($hashref->{$key} !~ m{^\d+$} || $hashref->{$key} <= 0) ) {
+                carp "$key must be numeric and greater then zero";
+            }
+            else {
+                $data_html_config{ ident $self }->{$key} = $hashref->{$key};
+            }
+        }    
+        return 1;
+    }
+    
     sub get_navi_html {
-        my($self) = @_;
+        my($self, $nostyle) = @_;
         my $ident = ident $self;
 
-        eval 'use CGI';
-        my $cgi = CGI->new();
-
         my $fixq = sub {
-            my ($cgi) = @_;
-            $cgi->delete($page_param{ $ident }) 
-                if defined $page_param{ $ident };
-            $cgi->delete($set_param{ $ident })
-                if defined $page_param{ $ident };
-            $cgi->delete($total_entries_param{ $ident })
-                if defined $total_entries_param{ $ident };
-            $cgi->param($total_entries_param{ $ident }, 
-                        $total_entries{ $ident })
+            $ext_obj{ ident $self }->delete($page_param{ $ident }) if defined $page_param{ $ident };
+            $ext_obj{ ident $self }->delete($set_param{ $ident }) if defined $page_param{ $ident };
+            $ext_obj{ ident $self }->delete($total_entries_param{ $ident }) if defined $total_entries_param{ $ident };
+            $ext_obj{ ident $self }->param($total_entries_param{ $ident }, $total_entries{ $ident })
                 if $total_entries_param{ $ident };
+            $ext_obj{ ident $self }->param($total_entries_verify_param_name{ $ident }, $total_entries_verify_param_value{ $ident })                
+                if $total_entries_verify_param_value{ $ident };
             1;
         };
 
-        $fixq->($cgi); # do it here to clear current data
+        $fixq->(); # do it here to clear current data
 
         $page_param{ $ident } = 'pg' if !$page_param{ $ident };
         $set_param{ $ident }  = 'st' if !$set_param{ $ident };
@@ -381,16 +574,17 @@ use Class::Std::Utils;
 #   my $pgn = shift;
 #   my $hsh = shift;
 #   if(ref($hsh) eq 'HASH') { for(keys %{ $hsh }) { $var->($_,$hsh->{$_}); } }
-#   $fixq->($cgi); # do it again here in case they changed the param names on us
+#   $fixq->(); # do it again here in case they changed the param names on us
 
-        my $slf  = $cgi->url(relative=>1);
+        my $slf  = $ext_obj{ ident $self }->url(relative=>1);
         my $sets = '';
         my $page = '';
 
         my $ws   = ' ' x $html_line_white_space{ $ident };
+
         my $div  = $as_table{ $ident } ? 'tr'  : 'div';
         my $spn  = $as_table{ $ident } ? 'td'  : 'span';
-        my $tbl  = $as_table{ $ident } ? '   ' : '';
+        my $tbl  = $as_table{ $ident } ? $ws   : '';
         my $beg  = $as_table{ $ident } ? "$ws<table $as_table{ $ident }>\n" : "\n";
         my $end  = $as_table{ $ident } ? "$ws</table>\n" : '';
         
@@ -402,31 +596,37 @@ use Class::Std::Utils;
             if($pages_per_set{ $ident }) {
                 if($one_set_hide{ $ident } && $last_set{ $ident } == 1) { $sets = $one_set_html{ $ident }; }
                 else {
-                    $sets .= "$ws$tbl<$div id=\"$cssid_set{ $ident }\">\n";
-                    $sets .= "$ws$tbl   <$spn id=\"cssid_set\">$of_set_html{ $ident }</$spn>\n" if $use_of_vars{ $ident };
-                    $simple_prev .= qq($ws$tbl   <$spn id="$cssid_not_current_set{ $ident }">$no_prev_set_html{ $ident }</$spn>\n) if !$previous_set{ $ident };
+                    $sets .= "$ws$tbl<$div class=\"$cssid_set{ $ident }\">\n";
+                    $sets .= "$ws$tbl$ws<$spn class=\"cssid_set\">$of_set_html{ $ident }</$spn>\n" if $use_of_vars{ $ident };
+                    $simple_prev .= qq($ws$tbl$ws<$spn class="$cssid_not_current_set{ $ident }">$no_prev_set_html{ $ident }</$spn>\n) if !$previous_set{ $ident };
                     if($previous_set{ $ident }) {
-                        $cgi->param($set_param{ $ident }, $previous_set{ $ident });
-                        my $url = $slf . '?' . $cgi->query_string();
-                        $cgi->delete($set_param{ $ident });
-                        $simple_prev .= qq($ws$tbl   <$spn id="$cssid_not_current_set{ $ident }"><a href="$url">$prev_set_html{ $ident }</a></$spn>\n);
+                        $ext_obj{ ident $self }->param($set_param{ $ident }, $previous_set{ $ident });
+                        my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                        $ext_obj{ ident $self }->delete($set_param{ $ident });
+                        $simple_prev .= qq($ws$tbl$ws<$spn class="$cssid_not_current_set{ $ident }"><a href="$url">$prev_set_html{ $ident }</a></$spn>\n);
                     }
                     $sets .= $simple_prev;
-                    for($first_set{ $ident } .. $last_set{ $ident }) {
-                        $cgi->param($set_param{ $ident }, $_);
-                        my $url = $slf . '?' . $cgi->query_string();
-                        $cgi->delete($set_param{ $ident });
+
+                    my $strt = $first_set_in_set{ $ident } || $first_set{ $ident };
+                    my $last = $last_set_in_set{ $ident } < $last_set{ $ident } && $last_set_in_set{ $ident } > 0 ? $last_set_in_set{ $ident } : $last_set{ $ident };
+                    # my $strt = $first_set{ $ident };
+                    # my $last = $last_set{ $ident };
+
+                    for($strt .. $last) {
+                        $ext_obj{ ident $self }->param($set_param{ $ident }, $_);
+                        my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                        $ext_obj{ ident $self }->delete($set_param{ $ident });
 
                         my $disp = $set_result_display_map{ $ident }->{$_} || $_;
-                        $sets .= qq($ws$tbl   <$spn id="$cssid_current_set{ $ident }">$pre_current_set{ $ident }$disp$pst_current_set{ $ident }</$spn>\n) if $_ == $current_set{ $ident };
-                        $sets .= qq($ws$tbl   <$spn id="$cssid_not_current_set{ $ident }">$pre_not_current_set{ $ident }<a href="$url">$disp</a>$pst_not_current_set{ $ident }</$spn>\n) if $_ != $current_set{ $ident };
+                        $sets .= qq($ws$tbl$ws<$spn class="$cssid_current_set{ $ident }">$pre_current_set{ $ident }$disp$pst_current_set{ $ident }</$spn>\n) if $_ == $current_set{ $ident };
+                        $sets .= qq($ws$tbl$ws<$spn class="$cssid_not_current_set{ $ident }">$pre_not_current_set{ $ident }<a href="$url">$disp</a>$pst_not_current_set{ $ident }</$spn>\n) if $_ != $current_set{ $ident };
                     }
-                    $simple_next .= qq($ws$tbl   <$spn id="$cssid_not_current_set{ $ident }">$no_next_set_html{ $ident }</$spn>\n) if !$next_set{ $ident };
+                    $simple_next .= qq($ws$tbl$ws<$spn class="$cssid_not_current_set{ $ident }">$no_next_set_html{ $ident }</$spn>\n) if !$next_set{ $ident };
                     if($next_set{ $ident }) {
-                        $cgi->param($set_param{ $ident }, $next_set{ $ident });
-                        my $url = $slf . '?' . $cgi->query_string();
-                        $cgi->delete($set_param{ $ident });
-                        $simple_next .= qq($ws$tbl   <$spn id="$cssid_not_current_set{ $ident }"><a href="$url">$next_set_html{ $ident }</a></$spn>\n);
+                        $ext_obj{ ident $self }->param($set_param{ $ident }, $next_set{ $ident });
+                        my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                        $ext_obj{ ident $self }->delete($set_param{ $ident });
+                        $simple_next .= qq($ws$tbl$ws<$spn class="$cssid_not_current_set{ $ident }"><a href="$url">$next_set_html{ $ident }</a></$spn>\n);
                     }
                     $sets .= $simple_next;
                     $sets .= "$ws$tbl</$div>\n";
@@ -434,40 +634,223 @@ use Class::Std::Utils;
             }
             if($one_page_hide{ $ident } && $last_page{ $ident } == 1) { $page = $one_page_html{ $ident }; }
             else {
-                $page .= "$ws$tbl<$div id=\"$cssid_page{ $ident }\">\n";
-                $page .= "$ws$tbl   <$spn id=\"cssid_page\">$of_page_html{ $ident }</$spn>\n" if $use_of_vars{ $ident };
+                $page .= "$ws$tbl<$div class=\"$cssid_page{ $ident }\">\n";
+                $page .= "$ws$tbl$ws<$spn class=\"cssid_page\">$of_page_html{ $ident }</$spn>\n" if $use_of_vars{ $ident };
                 $page .= $simple_prev if $simple_nav{ $ident };
-                $page .= qq($ws$tbl   <$spn id="$cssid_not_current_page{ $ident }">$no_prev_page_html{ $ident }</$spn>\n) if !$previous_page{ $ident };
+# todo: uninitialized value [???]:
+                $page .= qq($ws$tbl$ws<$spn class="$cssid_not_current_page{ $ident }">$no_prev_page_html{ $ident }</$spn>\n) if !$previous_page{ $ident };
                 if($previous_page{ $ident  }) {
-                    $cgi->param($page_param{ $ident }, $previous_page{ $ident });
-                    my $url = $slf . '?' . $cgi->query_string();
-                    $cgi->delete($page_param{ $ident });
-                    $page .= qq($ws$tbl   <$spn id="$cssid_not_current_page{ $ident }"><a href="$url">$prev_page_html{ $ident }</a></$spn>\n);
+                    $ext_obj{ ident $self }->param($page_param{ $ident }, $previous_page{ $ident });
+                    my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                    $ext_obj{ ident $self }->delete($page_param{ $ident });
+                    $page .= qq($ws$tbl$ws<$spn class="$cssid_not_current_page{ $ident }"><a href="$url">$prev_page_html{ $ident }</a></$spn>\n);
                 }
                 my $strt = $first_page_in_set{ $ident } || $first_page{ $ident };
                 my $stop = $last_page_in_set{ $ident } < $last_page{ $ident } && $last_page_in_set{ $ident } > 0 ? $last_page_in_set{ $ident } : $last_page{ $ident };
                 for($strt .. $stop) {
-                    $cgi->param($page_param{ $ident }, $_);
-                    my $url = $slf . '?' . $cgi->query_string();
-                    $cgi->delete($page_param{ $ident });
+                    $ext_obj{ ident $self }->param($page_param{ $ident }, $_);
+                    my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                    $ext_obj{ ident $self }->delete($page_param{ $ident });
 
                     my $disp = $page_result_display_map{ $ident }->{$_} || $_;
-                    $page .= qq($ws$tbl   <$spn id="$cssid_current_page{ $ident }">$pre_current_page{ $ident }$disp$pst_current_page{ $ident }</$spn>\n) if $_ == $current_page{ $ident };
-                    $page .= qq($ws$tbl   <$spn id="$cssid_not_current_page{ $ident }">$pre_not_current_page{ $ident }<a href="$url">$disp</a>$pst_not_current_page{ $ident }</$spn>\n) if $_ != $current_page{ $ident };
+                    $page .= qq($ws$tbl$ws<$spn class="$cssid_current_page{ $ident }">$pre_current_page{ $ident }$disp$pst_current_page{ $ident }</$spn>\n) if $_ == $current_page{ $ident };
+                    $page .= qq($ws$tbl$ws<$spn class="$cssid_not_current_page{ $ident }">$pre_not_current_page{ $ident }<a href="$url">$disp</a>$pst_not_current_page{ $ident }</$spn>\n) if $_ != $current_page{ $ident };
                 }
-                $page .= qq($ws$tbl   <$spn id="$cssid_not_current_page{ $ident }">$no_next_page_html{ $ident }</$spn>\n) if !$next_page{ $ident };
+                $page .= qq($ws$tbl$ws<$spn class="$cssid_not_current_page{ $ident }">$no_next_page_html{ $ident }</$spn>\n) if !$next_page{ $ident };
                 if($next_page{ $ident }) {
-                    $cgi->param($page_param{ $ident }, $next_page{ $ident });
-                    my $url = $slf . '?' . $cgi->query_string();
-                    $cgi->delete($page_param{ $ident });
-                    $page .= qq($ws$tbl   <$spn id="$cssid_not_current_page{ $ident }"><a href="$url">$next_page_html{ $ident }</a></$spn>\n);
+                    $ext_obj{ ident $self }->param($page_param{ $ident }, $next_page{ $ident });
+                    my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                    $ext_obj{ ident $self }->delete($page_param{ $ident });
+                    $page .= qq($ws$tbl$ws<$spn class="$cssid_not_current_page{ $ident }"><a href="$url">$next_page_html{ $ident }</a></$spn>\n);
                 }
                 $page .= $simple_next if $simple_nav{ $ident };
                 $page .= "$ws$tbl</$div>\n";
             }
 # TODO1 }
+        local $style{ $ident } = '' if $nostyle;
         return "$ws$style{ $ident }$beg$page$end" if $simple_nav{ $ident };
+# todo: uninitialized value [???]:
         return wantarray ? ( "$ws$style{ $ident }$beg$page$end", "$ws$style{ $ident }$beg$sets$end" ) : "$ws$style{ $ident }$beg$page$end$beg$sets$end";
+    }
+
+    sub get_data_html {
+        my($self, $myconf) = @_;
+        
+        my $orig = $self->get_data_html_config();
+
+        $self->set_data_html_config( $myconf ) if(defined $myconf && ref $myconf eq 'HASH');
+        
+        my $conf = $self->get_data_html_config();
+
+        my $ws   = ' ' x $html_line_white_space{ ident $self };
+
+        require List::Cycle;
+        my $col_alt = List::Cycle->new({ 'values' =>  $conf->{'col_alt_ar'} });
+        my $row_alt = List::Cycle->new({ 'values' =>  $conf->{'row_alt_ar'} });
+        
+        my $cols = int $conf->{'items_per_row'} ? int $conf->{'items_per_row'} : 1;
+        my $rows = POSIX::ceil( $entries_per_page{ ident $self } / $cols );
+        
+        my $startit = $conf->{'start_array_index_at_zero'} ? 0 : $self->get_first();
+        my $current = $startit + $cols;
+        
+        my $return = '';
+        my $print  = defined wantarray ? sub { $return .= $_ for @_; } : sub { print @_; };
+
+        $print->( $conf->{'top'}->($self, $ws) );
+        # $print->( $conf->{'header'}->($self, $ws) ) if $conf->{'start_header'};
+    
+        for my $cur_row (0 .. ($rows - 1)) { 
+            if( !($cur_row % $conf->{'headers_every'}) ) {
+                $print->( $conf->{'header'}->($self, $ws) ) 
+                    if !(!$conf->{'start_header'} && $cur_row == 0);
+                $row_alt->reset() if $conf->{'restart_row_alt_on_header'};
+            }
+            
+            my $rowalt = $row_alt->next();
+            $print->( $conf->{'prerow'}->( $self, $ws, $rowalt ) );
+            for my $ar_idx ($startit .. ($current -1)) {
+                $ar_idx = undef if $ar_idx > $total_entries{ ident $self };
+
+                $print->( $conf->{'idx_handler'}->( $self, $ws, $ar_idx, $col_alt->next() ) );      
+            }
+            $print->( $conf->{'pstrow'}->( $self, $ws, $rowalt ) );
+            
+            $startit += $cols;
+            $current += $cols; 
+        }
+        
+        $print->( $conf->{'bot'}->($self, $ws) );
+
+        $self->set_data_html_config($orig) if(defined $myconf && ref $myconf eq 'HASH');
+      
+        return $return if $return;
+    }
+    
+    sub get_navi_data_navi {
+        my ($self, $join) = @_;
+        $join ||= "<br />\n";
+        return join($join, scalar $self->get_navi_html(), $self->get_data_html(), scalar $self->get_navi_html(1));
+    }
+    
+    sub get_perpage_html {
+        my ($self, $asopts) = @_;
+        my $ident = ident $self;
+
+        my $ws = ' ' x $html_line_white_space{ $ident };
+        my $html = $asopts ? qq($ws$ws<select name="$perpage_html_config{ $ident }->{'pp_param'}">\n$ws$ws$ws<option value="">$perpage_html_config{ $ident }->{'pp_string'}</option>\n)
+                           : '';
+                           
+        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+        $ext_obj{ ident $self }->param($total_entries_verify_param_name{ $ident }, $total_entries_verify_param_value{ $ident })                
+            if $total_entries_verify_param_value{ $ident };
+            
+        my $slf = $ext_obj{ ident $self }->url(relative=>1);
+
+        if(keys %{ $perpage_html_config{ $ident }->{'allowed'} }) {
+            for my $num ( sort { $a <=> $b } grep { $_ > 0 } keys %{ $perpage_html_config{ $ident }->{'allowed'} }) {
+                if($num == $entries_per_page{ ident $self }) {
+                    $html .= $asopts ? qq($ws$ws$ws<option value="$num" selected>$num</option>\n)
+                                     : qq($pre_current_page{ ident $self }$num$pst_current_page{ ident $self } );
+                   
+                }
+                else {
+                    if(!$asopts) {
+                        $ext_obj{ ident $self }->param($perpage_html_config{ $ident }->{'pp_param'}, $num);
+                        my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                        $html .= qq($pre_not_current_page{ ident $self }<a href="$url">$num</a>$pst_not_current_page{ ident $self } ); 
+                        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+                    }
+                    else {
+                        $html .= qq($ws$ws$ws<option value="$num" >$num</option>\n)
+                    }
+                }
+            }
+      
+            if(exists $perpage_html_config{ $ident }->{'allowed'}{'0'}) {
+                if($entries_per_page{ ident $self } == $total_entries{ ident $self } && $perpage_html_config{ $ident }->{'is_all'}) {
+                    $html .= $asopts ? qq($ws$ws$ws<option value="0" selected>$perpage_html_config{ $ident }->{'all_string'}</option>\n)
+                                     : qq($pre_current_page{ ident $self }$perpage_html_config{ $ident }->{'all_string'}$pst_current_page{ ident $self } );
+                }
+                else {
+                    if(!$asopts) {
+                        $ext_obj{ ident $self }->param($perpage_html_config{ $ident }->{'pp_param'}, 0);
+                        my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
+                        $html .= qq($pre_not_current_page{ ident $self }<a href="$url">$perpage_html_config{ $ident }->{'all_string'}</a>$pst_not_current_page{ ident $self } );
+                        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+                    }
+                    else {
+                        $html .= qq($ws$ws$ws<option value="0" >$perpage_html_config{ $ident }->{'all_string'}</option>\n);
+                    }
+                }
+            }
+        }
+ 
+        if(!$asopts) {
+            $html =~ s{ $}{};
+            $html = $perpage_html_config{ $ident }->{'pp_string'} . $html if $html;
+        }
+        else {
+            $html .= "$ws$ws</select>\n";
+        }
+
+        return $html;
+    }
+    
+    sub get_perpage_html_select {
+        shift->get_perpage_html(1); 
+    }
+    
+    sub _default_style {
+        my($self) = @_;
+        my $ws = ' ' x $html_line_white_space{ ident $self };
+        return <<"END_CSS";
+$ws<style type="text/css">
+$ws<!-- 
+
+$ws$ws.page {
+$ws$ws${ws}text-align: center;
+$ws$ws} 
+
+$ws$ws.set {
+$ws$ws${ws}text-align: center;
+$ws$ws}
+
+$ws$ws.data_table {
+$ws$ws${ws}margin-left:auto; 
+$ws$ws${ws}margin-right:auto;
+$ws$ws${ws}color: #202020;
+$ws$ws${ws}border: solid #202020 1px;
+$ws$ws${ws}/* border-collapse: collapse; */
+$ws$ws${ws}border-spacing: 1px;
+$ws$ws}
+
+$ws$ws.data_header {
+$ws$ws${ws}text-align: center;
+$ws$ws${ws}background-color: #787878;
+$ws$ws${ws}color: #F8F8F8;
+$ws$ws${ws}font-weight: bold;
+$ws$ws}
+
+$ws$ws.data_perpage {
+$ws$ws${ws}text-align: right;
+$ws$ws}
+
+$ws$ws.data_light {
+$ws$ws${ws}background-color: #F0F0F0;
+$ws$ws}
+
+$ws$ws.data_medium {
+$ws$ws${ws}background-color: #D8D8D8;
+$ws$ws}
+
+$ws$ws.data_dark {
+$ws$ws${ws}background-color: #C0C0C0;
+$ws$ws}
+
+$ws-->
+$ws</style>
+END_CSS
     }
 
 } #### end scoping "inside-out" class ##
@@ -849,14 +1232,14 @@ So say you want to add functionality for TMBG please do it like so:
 
 - use "Data::Paginate::TMBG" as the package name.
 
-- use Data::Paginate; in your module
+- use Data::Paginate; in your module (use base 'Data::Paginate'; for inheritence)
 
-- make the method name like:
+- make the method name like so (or prefix w/ Data::Paginate:: if !use base, but why would you do that ;p):
 
-    sub Data::Paginate::get_navi_tmbg { # each subclass should have a get_navi_* function so its use is consistent
+    sub get_navi_tmbg { # each subclass should have a get_navi_* function so its use is consistent
          my ($pgr) = @_; # Data::Paginate Object
 
-    sub Data::Paginate::make_a_little_birdhouse_in_your_soul {
+    sub make_a_little_birdhouse_in_your_soul {
          my ($pgr) = @_; # Data::Paginate Object
 
 That way it can be used like so:
@@ -868,11 +1251,12 @@ That way it can be used like so:
     $pgr->make_a_little_birdhouse_in_your_soul({ 'say' => q{I'm the only bee in your bonnet} }); # misc function to do whatever you might need
 
     print $pgr->get_navi_tmbg();
-        
 
 =head1 TO DO
 
-- get_data_html()
+- POD and Changelog for 0.0.2
+
+- Support Locale::Maketext handles for output in any language
 
 - A few additions to get_navi_html()
 
