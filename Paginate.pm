@@ -2,7 +2,7 @@ package Data::Paginate;
 
 use strict;
 use warnings;
-use version;our $VERSION = qv('0.0.2');
+use version;our $VERSION = qv('0.0.3');
 
 use Carp ();
 use POSIX ();
@@ -10,12 +10,12 @@ use Class::Std;
 use Class::Std::Utils;
 
 sub croak {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     Carp::croak(@_);
 }
 
 sub carp {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     Carp::carp(@_);
 }
 
@@ -29,8 +29,7 @@ sub carp {
         my ($self, $digit, $checkonly) = @_;
         my $reftype        = ref $digit;
 
-        # local $Carp::CarpLevel = 1;
-        croak 'Argument to set_total_entries() must be a digit or an array ref' if $digit !~ m/^\d+$/ && $reftype ne 'ARRAY';
+        carp('Argument to set_total_entries() must be a digit or an array ref') && return if $digit !~ m/^\d+$/ && $reftype ne 'ARRAY';
         return 1 if $checkonly;
         $total_entries{ ident $self } = $reftype eq 'ARRAY' ? @{ $digit } 
                                                             : $digit;
@@ -40,7 +39,7 @@ sub carp {
     my %entries_per_page          :ATTR('get' => 'entries_per_page', 'default' => '10');
     sub set_entries_per_page { 
         my ($self, $digit, $checkonly) = @_; 
-        croak 'Argument to set_entries_per_page() must be a digit' 
+        carp('Argument to set_entries_per_page() must be a digit') && return
             if $digit !~ m/^\d+$/;   
         return 1 if $checkonly;
         $entries_per_page{ ident $self } = $digit;        
@@ -50,7 +49,7 @@ sub carp {
     my %pages_per_set             :ATTR('get' => 'pages_per_set', 'default' => '10');
     sub set_pages_per_set { 
         my ($self, $digit, $checkonly) = @_; 
-        croak 'Argument to set_pages_per_set() must be a digit' 
+        carp('Argument to set_pages_per_set() must be a digit') && return 
            if $digit !~ m/^\d+$/;      
         return 1 if $checkonly;
         $pages_per_set{ ident $self } = $digit;     
@@ -60,7 +59,7 @@ sub carp {
     my %sets_per_set             :ATTR('get' => 'sets_per_set', 'default' => '10');
     sub set_sets_per_set { 
         my ($self, $digit, $checkonly) = @_; 
-        croak 'Argument to set_sets_per_set() must be a digit' 
+        carp('Argument to set_sets_per_set() must be a digit') && return
            if $digit !~ m/^\d+$/;      
         return 1 if $checkonly;
         $sets_per_set{ ident $self } = $digit;     
@@ -70,7 +69,7 @@ sub carp {
     my %current_page              :ATTR('get' => 'current_page', 'default' => '1');
     sub _set_current_page {     
         my ($self, $digit, $checkonly) = @_;               
-        croak 'Argument to _set_current_page() must be a digit' 
+        carp('Argument to _set_current_page() must be a digit') && return 
            if $digit !~ m/^\d+$/;         
         return 1 if $checkonly;
         $current_page{ ident $self } = $digit;               
@@ -80,12 +79,12 @@ sub carp {
     my %variable_entries_per_page :ATTR('get' => 'variable_entries_per_page', 'default' => {});
     sub set_variable_entries_per_page {
         my ($self, $hashref, $checkonly) = @_;
-        croak 'Argument to set_variable_entries_per_page() must be a hashref' 
+        carp('Argument to set_variable_entries_per_page() must be a hashref') && return 
             if ref $hashref ne 'HASH';
         for(keys %{ $hashref }) {
-            croak 'Non digit key in set_variable_entries_per_page() arg' 
+            carp('Non digit key in set_variable_entries_per_page() arg') && return
                 if $_ !~ m/^\d+$/;
-            croak "Non digit value in set_variable_entries_per_page() arg $_" 
+            carp("Non digit value in set_variable_entries_per_page() arg $_") && return 
                 if $hashref->{$_} !~ m/^\d+$/;
         }
         return 1 if $checkonly;
@@ -99,7 +98,7 @@ sub carp {
     my %ext_obj :ATTR('get' => 'ext_obj');
     sub set_ext_obj {
         my ($self, $obj) = @_;
-        croak 'Argument to set_ext_obj() must be an object' 
+        carp('Argument to set_ext_obj() must be an object') && return 
             if !ref $obj;
         $ext_obj{ ident $self } = $obj;
     }
@@ -107,7 +106,7 @@ sub carp {
     my %page_result_display_map :ATTR('get' => 'page_result_display_map', 'default' => {}); 
     sub set_page_result_display_map {
         my ($self, $hashref) = @_;
-        croak 'Argument to set_page_result_display_map() must be a hashref' 
+        carp('Argument to set_page_result_display_map() must be a hashref') && return 
             if ref $hashref ne 'HASH';
         $page_result_display_map{ ident $self } = $hashref;
     }
@@ -115,7 +114,7 @@ sub carp {
     my %set_result_display_map  :ATTR('get' => 'set_result_display_map', 'default' => {}); 
     sub set_set_result_display_map {
         my ($self, $hashref) = @_;
-        croak 'Argument to set_result_display_map() must be a hashref' 
+        carp('Argument to set_result_display_map() must be a hashref') && return 
             if ref $hashref ne 'HASH';
         $set_result_display_map{ ident $self } = $hashref;
     }
@@ -123,7 +122,7 @@ sub carp {
     my %result_display_map      :ATTR; # set 2 above, no get_:
     sub set_result_display_map {
         my ($self, $hashref) = @_;
-        croak 'Argument to set_result_display_map() must be a hashref' 
+        carp('Argument to set_result_display_map() must be a hashref') && return 
             if ref $hashref ne 'HASH';
         $page_result_display_map{ ident $self } = $hashref;
         $set_result_display_map{ ident $self } = $hashref;
@@ -132,7 +131,7 @@ sub carp {
     my %html_line_white_space   :ATTR('get' => 'html_line_white_space', 'default' => '0'); 
     sub set_html_line_white_space {
         my ($self, $digit) = @_;
-        croak 'Argument to set_html_line_white_space() must be a digit' 
+        carp('Argument to set_html_line_white_space() must be a digit') && return 
             if $digit !~ m/^\d+$/;
         $html_line_white_space{ ident $self } = $digit;
     }
@@ -140,7 +139,7 @@ sub carp {
     my %param_handler           :ATTR('get' => 'param_handler', 'default' => undef);
     sub set_param_handler {
         my ($self, $coderef) = @_;
-        croak 'Argument to set_param_handler() must be a code ref' 
+        carp('Argument to set_param_handler() must be a code ref') && return 
             if ref $coderef ne 'CODE';
         $param_handler{ ident $self } = $coderef;
     }
@@ -148,7 +147,7 @@ sub carp {
     my %sets_in_rows            :ATTR('get' => 'sets_in_rows', 'default' => '0');         
     sub set_sets_in_rows {
         my ($self, $digit) = @_;
-        croak 'Argument to set_sets_in_rows() must be a digit' 
+        carp('Argument to set_sets_in_rows() must be a digit') && return 
             if $digit !~ m/^\d+$/;
         $sets_in_rows{ ident $self } = $digit;
     }
@@ -483,7 +482,7 @@ sub carp {
 
         $self->set_perpage_html_config( $arg_ref->{'perpage_html_config'}, 1 ) 
             if ref $arg_ref->{'perpage_html_config'} eq 'HASH';
-            
+  
         $self->_calculate();
     }
 
@@ -510,7 +509,7 @@ sub carp {
             my $test = $param_handler{ ident $self }->( $perpage_html_config{ ident $self }->{'pp_param'} );
             $pp = $test || '';
             $pp = '' if !$pp || !exists $perpage_html_config{ ident $self }->{'allowed'}{$test};
-            if(exists $perpage_html_config{ ident $self }->{'allowed'}{'0'} && $pp eq '0') {
+            if(exists $perpage_html_config{ ident $self }->{'allowed'}{'0'} && $pp eq '' && $test eq '0') {
                 $pp = $total_entries{ ident $self };
                 $perpage_html_config{ ident $self }->{'is_all'} = 1
             }
@@ -518,7 +517,7 @@ sub carp {
                 $perpage_html_config{ ident $self }->{'is_all'} = 0;
             }
         }
-        
+
         if($pp) {
             if($trustme_nocalc) {
                 $entries_per_page{ ident $self } = $pp;
@@ -836,6 +835,11 @@ $ws$ws.data_perpage {
 $ws$ws${ws}text-align: right;
 $ws$ws}
 
+$ws$ws.data_na {
+$ws$ws${ws}background-color: #F5F5F5; 
+$ws$ws${ws}color: #DCDCDC;
+$ws$ws}
+
 $ws$ws.data_light {
 $ws$ws${ws}background-color: #F0F0F0;
 $ws$ws}
@@ -909,6 +913,11 @@ This is very handy to make the navigation easier to use. Say you have data that 
 If you set this to, say 20, you'd see navigation for pages 1..20, then 21..30, etc etc instead of 1..1000 which would be ungainly.
 
 The use of sets is encouraged but you can turn it off by setting it to 0.
+
+=item sets_per_set (pages_per_set)
+
+If sets are in use then this is how many sets to show in the navigation. 
+So if there are 100 sets and its set to 10 it will show 11-20 if you are on say set 12.
 
 =item current_page (1)
 
@@ -1072,10 +1081,8 @@ Each has a get_ function but does not have a set_ funtion and cannot be specifie
 
 
 =over
- 
 
 =item entries_on_this_page
-
 
 The number of entries on the page, its always "entries_per_page" except when you are on the last page and there are less than "entries_per_page" left.
 
@@ -1134,6 +1141,14 @@ Page number of the last page in the set.
 =item first_page_in_set    
 
 Page number of the first page in the set.
+
+=item first_set_in_set
+
+First set in this display's "sets_per_set" range.
+
+=item last_set_in_set
+
+Last set in this display's "sets_per_set" range.
 
 =back
 
@@ -1206,7 +1221,7 @@ Example using module to not only paginate easily but optimize database calls:
 
     # set total_entries *once* then pass it around 
     # in the object's links from then on for efficiency:
-    my $total_entries = CGI::param('te') =~ m/^\d+$/ && CGI::param('te') > 0
+    my ($total_entries) = CGI::param('te') =~ m/^\d+$/ && CGI::param('te') > 0
         ? CGI::param('te') 
         : $dbh->select_rowarray("SELECT COUNT(*) FROM baz WHERE $where");
 
@@ -1223,6 +1238,22 @@ Example using module to not only paginate easily but optimize database calls:
     }
 
     print scalar $pgr->get_navi_html();
+
+Example to keep the 'te' parameter safe from being spoofed (and do same optimization as above) - HIGHLY RECOMMENDED:
+
+    my $verify        = CGI::param('ve') || '';
+    my $total_entries = int( CGI::param('te') );
+    my $te_match      = $total_entries ? Digest::MD5::md5_hex("unique_cypher-$total_entries-$where") : '';
+    if(!$total_entries || $verify ne $te_match) {
+        # its not ok so re-fetch
+        ($total_entries) = $dbh->select_rowarray("SELECT COUNT(*) FROM baz WHERE $where");
+        $te_match        = Digest::MD5::md5_hex("unique_cypher-$total_entries-$where");
+    }
+    # otherwise its all ok so use it 
+    my $pgr = Data::Paginate->new({ 
+        'total_entries' => $total_entries,
+        'total_entries_verify_param_value' => $te_match,
+    ...
 
 =head1 SUBCLASSING
 
@@ -1254,7 +1285,21 @@ That way it can be used like so:
 
 =head1 TO DO
 
-- POD and Changelog for 0.0.2
+- POD and Changelog for 0.0.2 and 0.0.3
+
+  data_na CSS class
+  total_entries_verify_param_name (ve)
+  total_entries_verify_param_value ('')
+
+  [set_]ext_obj
+  [get|set]_data_html_config + new()
+  [get|set]_perpage_html_config + new()
+  get_navi_html(\$nostyle)
+  get_data_html() (plus style{} addition)
+  get_state_html()
+  get_navi_data_navi()
+  get_perpage_html()
+  get_perpage_html_select() IE: get_perpage_html(1)
 
 - Support Locale::Maketext handles for output in any language
 
