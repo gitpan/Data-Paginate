@@ -1,5 +1,9 @@
 Revision history for Perl extension Data::Paginate.
 
+
+0.0.4
+	- fixed one off bug in idx_handler
+	
 0.0.3
     - carp && return instead of croak
 	- pp=0 fix

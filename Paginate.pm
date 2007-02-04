@@ -2,7 +2,7 @@ package Data::Paginate;
 
 use strict;
 use warnings;
-use version;our $VERSION = qv('0.0.3');
+use version;our $VERSION = qv('0.0.4');
 
 use Carp ();
 use POSIX ();
@@ -690,7 +690,7 @@ sub carp {
         my $cols = int $conf->{'items_per_row'} ? int $conf->{'items_per_row'} : 1;
         my $rows = POSIX::ceil( $entries_per_page{ ident $self } / $cols );
         
-        my $startit = $conf->{'start_array_index_at_zero'} ? 0 : $self->get_first();
+        my $startit = $conf->{'start_array_index_at_zero'} ? 0 : $self->get_first() - 1;
         my $current = $startit + $cols;
         
         my $return = '';
