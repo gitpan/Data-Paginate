@@ -1,6 +1,8 @@
 Revision history for Perl extension Data::Paginate.
 
-
+0.0.5
+    - reset pp_param instead of deleting it so everything can pass it consistently under all conditions
+    
 0.0.4
 	- fixed one off bug in idx_handler
 	

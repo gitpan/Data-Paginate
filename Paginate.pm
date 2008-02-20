@@ -2,7 +2,7 @@ package Data::Paginate;
 
 use strict;
 use warnings;
-use version;our $VERSION = qv('0.0.4');
+use version;our $VERSION = qv('0.0.5');
 
 use Carp ();
 use POSIX ();
@@ -740,7 +740,7 @@ sub carp {
         my $html = $asopts ? qq($ws$ws<select name="$perpage_html_config{ $ident }->{'pp_param'}">\n$ws$ws$ws<option value="">$perpage_html_config{ $ident }->{'pp_string'}</option>\n)
                            : '';
                            
-        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+        my $pp_value = $ext_obj{ ident $self }->param( $perpage_html_config{ $ident }->{'pp_param'} );
         $ext_obj{ ident $self }->param($total_entries_verify_param_name{ $ident }, $total_entries_verify_param_value{ $ident })                
             if $total_entries_verify_param_value{ $ident };
             
@@ -758,7 +758,7 @@ sub carp {
                         $ext_obj{ ident $self }->param($perpage_html_config{ $ident }->{'pp_param'}, $num);
                         my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
                         $html .= qq($pre_not_current_page{ ident $self }<a href="$url">$num</a>$pst_not_current_page{ ident $self } ); 
-                        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+                        $ext_obj{ ident $self }->param( $perpage_html_config{ $ident }->{'pp_param'}, $pp_value );
                     }
                     else {
                         $html .= qq($ws$ws$ws<option value="$num" >$num</option>\n)
@@ -776,7 +776,7 @@ sub carp {
                         $ext_obj{ ident $self }->param($perpage_html_config{ $ident }->{'pp_param'}, 0);
                         my $url = $slf . '?' . $ext_obj{ ident $self }->query_string();
                         $html .= qq($pre_not_current_page{ ident $self }<a href="$url">$perpage_html_config{ $ident }->{'all_string'}</a>$pst_not_current_page{ ident $self } );
-                        $ext_obj{ ident $self }->delete( $perpage_html_config{ $ident }->{'pp_param'} );
+                        $ext_obj{ ident $self }->param( $perpage_html_config{ $ident }->{'pp_param'}, $pp_value );
                     }
                     else {
                         $html .= qq($ws$ws$ws<option value="0" >$perpage_html_config{ $ident }->{'all_string'}</option>\n);
