@@ -2,7 +2,7 @@ package Data::Paginate;
 
 use strict;
 use warnings;
-use version;our $VERSION = qv('0.0.5');
+use version;our $VERSION = qv('0.0.6');
 
 use Carp ();
 use POSIX ();
@@ -426,20 +426,29 @@ sub carp {
             'row_alt_ar'    => [qw(data_light data_medium data_dark)],
             'top'           => sub {
                 my ($self, $indent) = @_;
+                my $ident = ident $self;
                 my $start = qq($indent<table class="data_table">\n);
                 return $start if !$data_html_config{ $ident }->{'inc_perpage'};
-                return qq($start$indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="2">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n);
+                my $colspan = exists $data_html_config{ $ident }->{'items_per_row'} && int($data_html_config{ $ident }->{'items_per_row'}) ? int($data_html_config{ $ident }->{'items_per_row'}) : 2;
+                $colspan = ($colspan * 2);
+                return qq($start$indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="$colspan">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n);
             },
             'bot'           => sub {
                 my ($self, $indent) = @_;
+                my $ident = ident $self;
                 my $start = qq($indent</table>\n); 
                 return $start if !$data_html_config{ $ident }->{'inc_perpage'};
-                return qq($indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="2">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n$start);
+                my $colspan = exists $data_html_config{ $ident }->{'items_per_row'} && int($data_html_config{ $ident }->{'items_per_row'}) ? int($data_html_config{ $ident }->{'items_per_row'}) : 2;
+                $colspan = ($colspan * 2);
+                return qq($indent$indent<tr class="data_perpage">\n$indent$indent$indent<td colspan="$colspan">) . $self->get_perpage_html() . qq(</td>\n$indent$indent</tr>\n$start);
             },
             'header'        => sub {
                 my ($self, $indent) = @_;
+                my $ident = ident $self;
                 return '' if $data_html_config{ ident $self }->{'stop_headers'};
-                return qq($indent$indent<tr class="data_header">\n$indent$indent$indent<td>Setup Mode: Header</td><td>'header' key needs set</td>\n$indent$indent</tr>\n);
+                my $colspan = exists $data_html_config{ $ident }->{'items_per_row'} && int($data_html_config{ $ident }->{'items_per_row'}) ? int($data_html_config{ $ident }->{'items_per_row'}) : 2;
+                $colspan = ($colspan * 2);
+                return qq($indent$indent<tr class="data_header">\n$indent$indent$indent<td colspan="$colspan">Setup Mode: Header, 'header' key needs set</td>\n$indent$indent</tr>\n);
             },
             'inc_perpage'   => 0,
             'start_header'  => 1,
@@ -453,7 +462,7 @@ sub carp {
                 # $array_idx = 'undef' if !defined $array_idx;
                 if(!defined $array_idx) {
                     $data_html_config{ ident $self }->{'stop_headers'} = 1;
-                    return '';
+                    return '<td class="data_na" colspan="2">Setup mode empty filler</td>';
                 }
                 return qq($indent$indent$indent<td class="$col_alt">Setup Mode: idx_handler array index: $array_idx</td><td class="$col_alt">'idx_handler' key needs set</td>\n);
             },
@@ -699,22 +708,25 @@ sub carp {
         $print->( $conf->{'top'}->($self, $ws) );
         # $print->( $conf->{'header'}->($self, $ws) ) if $conf->{'start_header'};
     
+        ROW:
         for my $cur_row (0 .. ($rows - 1)) { 
             if( !($cur_row % $conf->{'headers_every'}) ) {
                 $print->( $conf->{'header'}->($self, $ws) ) 
                     if !(!$conf->{'start_header'} && $cur_row == 0);
                 $row_alt->reset() if $conf->{'restart_row_alt_on_header'};
             }
-            
+            last ROW if $startit >= $total_entries{ ident $self };
+
+            my  $no_more_rows = 0;
             my $rowalt = $row_alt->next();
             $print->( $conf->{'prerow'}->( $self, $ws, $rowalt ) );
-            for my $ar_idx ($startit .. ($current -1)) {
-                $ar_idx = undef if $ar_idx > $total_entries{ ident $self };
-
+            for my $ar_idx ($startit .. ($current - 1)) {
+                $ar_idx = undef if $ar_idx >= $total_entries{ ident $self };
+                $no_more_rows++ if !defined $ar_idx;
                 $print->( $conf->{'idx_handler'}->( $self, $ws, $ar_idx, $col_alt->next() ) );      
             }
             $print->( $conf->{'pstrow'}->( $self, $ws, $rowalt ) );
-            
+            last ROW if $no_more_rows; 
             $startit += $cols;
             $current += $cols; 
         }
@@ -741,6 +753,11 @@ sub carp {
                            : '';
                            
         my $pp_value = $ext_obj{ ident $self }->param( $perpage_html_config{ $ident }->{'pp_param'} );
+        if ( !exists $perpage_html_config{ $ident }->{'allowed'}{ $pp_value } ) { 
+            $ext_obj{ ident $self }->param( $perpage_html_config{ $ident }->{'pp_param'}, $entries_per_page{ ident $self });
+            $pp_value = $entries_per_page{ ident $self };
+        }
+
         $ext_obj{ ident $self }->param($total_entries_verify_param_name{ $ident }, $total_entries_verify_param_value{ $ident })                
             if $total_entries_verify_param_value{ $ident };
             
@@ -751,7 +768,6 @@ sub carp {
                 if($num == $entries_per_page{ ident $self }) {
                     $html .= $asopts ? qq($ws$ws$ws<option value="$num" selected>$num</option>\n)
                                      : qq($pre_current_page{ ident $self }$num$pst_current_page{ ident $self } );
-                   
                 }
                 else {
                     if(!$asopts) {
@@ -1228,12 +1244,14 @@ Example using module to not only paginate easily but optimize database calls:
     my $pgr = Data::Paginate->new({ total_entries => $total_entries });
 
     # only SELECT current page's records:
-    my $query = "SELECT foo, bar FROM baz WHERE $where LIMIT " 
-                . $pgr->get_firstlast();
+    # Hint: set 'data_html_config's 'start_array_index_at_zero' to true if you are using 'data_html_config'
+    #   that way the array index pass to idx_handlers for the array of records for this page (IE the LIMITed records) 
+    # LIMIT $pgr->get_entries_per_page() OFFSET ($pgr->get_first() - 1)
+    my $query = "SELECT foo, bar FROM baz WHERE $where LIMIT ? OFFSET ?";
 
     print scalar $pgr->get_navi_html();
 
-    for my $record (@{ $dbh->selectall_arrayref($query) }) {
+    for my $record (@{ $dbh->selectall_arrayref($query, undef, $pgr->get_entries_per_page(), ($pgr->get_first() - 1)) }) {
         # display $record here
     }
 

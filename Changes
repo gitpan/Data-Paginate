@@ -1,5 +1,11 @@
 Revision history for Perl extension Data::Paginate.
 
+0.0.6 Fri Apr 11 10:02:35 2008
+    - mis-setting of default pp_param
+    - phantom no more records at end of row on data_html_config->items_per_row > 1
+    - fixed up setup mode output of row on data_html_config->items_per_row > 1
+    - minor POD tweak
+    
 0.0.5
     - reset pp_param instead of deleting it so everything can pass it consistently under all conditions
     
